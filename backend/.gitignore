@@ -1,0 +1,50 @@
+# ======================
+# Python
+# ======================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env
+.env.local
+.env.*.local
+# Keep .env.example as it's a template
+
+# ======================
+# IDE / Editor
+# ======================
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# ======================
+# Logs & runtime files
+# ======================
+*.log
+*.sqlite
+*.db
+
+# ======================
+# Claude / AI tools
+# ======================
+.claude/
+settings.local.json
+
+# ======================
+# Build / cache
+# ======================
+build/
+dist/
+.eggs/
+*.egg-info/
+
+# ======================
+# OS
+# ======================
+Thumbs.db
+.DS_Store

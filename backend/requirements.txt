@@ -1,0 +1,42 @@
+# Core Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-dotenv>=1.0.0
+pydantic>=2.6.0
+pydantic-settings>=2.1.0
+
+# Database
+supabase>=2.3.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+cryptography>=42.0.2
+PyJWT>=2.8.0
+
+# Google APIs
+google-auth>=2.27.0
+google-auth-oauthlib>=1.2.0
+google-api-python-client>=2.116.0
+
+# Slack API
+slack-sdk>=3.26.2
+
+# OpenAI
+openai>=1.12.0
+
+# HTTP Client
+httpx>=0.26.0
+requests>=2.31.0
+
+# Document Processing
+PyMuPDF>=1.23.0  # PDF extraction (fitz)
+pdfplumber>=0.10.0  # Alternative PDF extraction (better for tables)
+python-docx>=1.1.0  # Word documents (.docx)
+openpyxl>=3.1.2  # Excel files (.xlsx)
+python-pptx>=0.6.21  # PowerPoint files (.pptx)
+
+# File Type Detection (optional but recommended)
+python-magic>=0.4.27
+
+# Async Support
+aiofiles>=23.2.1
