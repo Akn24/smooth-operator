@@ -1,6 +1,6 @@
-# ProactivePA - AI Meeting Prep Assistant
+# Smooth Operator - AI Meeting Prep Assistant
 
-ProactivePA is an AI-powered web application that generates comprehensive meeting prep documents by analyzing your Google Calendar, Gmail, and Slack communications.
+Smooth Operator is an AI-powered web application that generates comprehensive meeting prep documents by analyzing your Google Calendar, Gmail, and Slack communications.
 
 ## Features
 
