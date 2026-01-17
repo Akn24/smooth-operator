@@ -15,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "ProactivePA - AI Meeting Prep Assistant",
+  title: "Smooth Operator - AI Meeting Prep Assistant",
   description: "Generate AI-powered meeting prep documents by analyzing your calendar, emails, and Slack messages",
 };
 

@@ -147,6 +147,21 @@ async def check_connection_status(user_id: str) -> dict:
     }
 
 
+async def get_user_email(user_id: str) -> Optional[str]:
+    """Get the user's email from Supabase auth."""
+    client = get_supabase_admin_client()
+
+    try:
+        # Try to get user from auth.users via admin API
+        user = client.auth.admin.get_user_by_id(user_id)
+        if user and user.user:
+            return user.user.email
+    except Exception:
+        pass
+
+    return None
+
+
 async def get_all_users_with_google() -> list[str]:
     """Get all user IDs that have Google connected (for scheduler)."""
     client = get_supabase_admin_client()

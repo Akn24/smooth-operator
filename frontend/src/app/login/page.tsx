@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center p-3 bg-gradient-to-r from-purple-600 to-blue-600 rounded-2xl mb-4">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">ProactivePA</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Smooth Operator</h1>
           <p className="text-gray-600 mt-2">
             AI-powered meeting prep assistant
           </p>
@@ -97,11 +97,10 @@ export default function LoginPage() {
           </h2>
 
           {error && (
-            <div className={`mb-4 p-3 rounded-lg flex items-start gap-2 text-sm ${
-              error.includes('Check your email')
+            <div className={`mb-4 p-3 rounded-lg flex items-start gap-2 text-sm ${error.includes('Check your email')
                 ? 'bg-green-50 text-green-700 border border-green-200'
                 : 'bg-red-50 text-red-700 border border-red-200'
-            }`}>
+              }`}>
               <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>

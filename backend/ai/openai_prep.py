@@ -18,11 +18,12 @@ class PrepDocumentGenerator:
         meeting: Meeting,
         emails: list[Email],
         slack_messages: list[SlackMessage],
+        user_email: str | None = None,
     ) -> PrepDocument:
         """Generate a comprehensive meeting prep document."""
 
         # Build context from all sources
-        context = self._build_context(meeting, emails, slack_messages)
+        context = self._build_context(meeting, emails, slack_messages, user_email)
 
         # Generate prep document using GPT-4
         response = self.client.chat.completions.create(
@@ -33,6 +34,11 @@ class PrepDocumentGenerator:
                     "content": """You are an expert executive assistant helping prepare for meetings.
 
 Your task is to analyze meeting details, recent email communications, and Slack messages to create a comprehensive meeting prep document.
+
+IMPORTANT: Write from the USER's perspective. Use "you" when referring to the user, not their name. For example:
+- Instead of "Ankit has spoken with..." write "You have spoken with..."
+- Instead of "Ankit should follow up..." write "You should follow up..."
+- Refer to other attendees by their names, but always use "you/your" for the user.
 
 You must respond with valid JSON in exactly this format:
 {
@@ -80,10 +86,17 @@ Be specific and actionable. If there's limited context, make reasonable assumpti
         meeting: Meeting,
         emails: list[Email],
         slack_messages: list[SlackMessage],
+        user_email: str | None = None,
     ) -> str:
         """Build a context string from all available information."""
 
         parts = []
+
+        # User identification
+        if user_email:
+            parts.append("## CURRENT USER (you)")
+            parts.append(f"Email: {user_email}")
+            parts.append("NOTE: When writing the prep document, refer to this person as 'you', not by name.\n")
 
         # Meeting details
         parts.append("## MEETING DETAILS")
@@ -102,8 +115,12 @@ Be specific and actionable. If there's limited context, make reasonable assumpti
             parts.append("\n## ATTENDEES")
             for attendee in meeting.attendees:
                 name = attendee.name or attendee.email
+                is_user = user_email and attendee.email.lower() == user_email.lower()
                 status = f" ({attendee.response_status})" if attendee.response_status else ""
-                parts.append(f"- {name}{status}")
+                if is_user:
+                    parts.append(f"- {name}{status} [THIS IS YOU]")
+                else:
+                    parts.append(f"- {name}{status}")
 
         # Recent emails
         if emails:
@@ -138,20 +155,23 @@ class DemoGenerator:
         meeting: Meeting,
         emails: list[Email],
         slack_messages: list[SlackMessage],
+        user_email: str | None = None,
     ) -> PrepDocument:
         """Generate a demo prep document without calling OpenAI."""
 
-        attendee_names = [a.name or a.email.split("@")[0] for a in meeting.attendees]
+        # Filter out user from attendee names
+        other_attendees = [a for a in meeting.attendees if not (user_email and a.email.lower() == user_email.lower())]
+        attendee_names = [a.name or a.email.split("@")[0] for a in other_attendees]
         names_str = ", ".join(attendee_names[:2]) if attendee_names else "the team"
 
         context_summary = f"""This meeting "{meeting.title}" is scheduled with {names_str}.
 
-Based on recent communications, there has been ongoing discussion about project priorities and upcoming deliverables. The team has been actively collaborating on key initiatives and this meeting appears to be a check-in to align on progress.
+Based on recent communications, there has been ongoing discussion about project priorities and upcoming deliverables. You have been actively collaborating on key initiatives and this meeting appears to be a check-in to align on progress.
 
-Recent Slack activity shows active engagement around the topics likely to be discussed. Email threads indicate follow-up items from previous conversations that may be relevant."""
+Recent Slack activity shows active engagement around the topics likely to be discussed. Email threads indicate follow-up items from your previous conversations that may be relevant."""
 
         key_points = [
-            f"Meeting with {len(meeting.attendees)} attendee(s) scheduled for {meeting.start_time.strftime('%B %d')}",
+            f"Meeting with {len(other_attendees)} other attendee(s) scheduled for {meeting.start_time.strftime('%B %d')}",
             "Review recent project updates and status",
             "Discuss any blockers or challenges",
             "Align on priorities for the upcoming period",

@@ -25,6 +25,7 @@ from supabase_client import (
     store_meeting_prep,
     get_meeting_prep,
     check_connection_status,
+    get_user_email,
 )
 from integrations import GoogleCalendarClient, GmailClient, SlackClient
 from context_gatherer import ContextGatherer, DemoContextGatherer
@@ -348,6 +349,9 @@ async def generate_enhanced_prep(
     # Apply intelligent filtering
     filtered_context = analyze_meeting_context(context, meeting.title)
 
+    # Get user's email for perspective
+    user_email = await get_user_email(user_id) if not settings.demo_mode else None
+
     # Generate enhanced prep
     if settings.demo_mode:
         generator = DemoPrepGenerator()
@@ -358,6 +362,7 @@ async def generate_enhanced_prep(
         meeting=meeting,
         filtered_context=filtered_context,
         has_external_attendees=context.has_external_attendees(),
+        user_email=user_email,
     )
 
     # Cache the result
@@ -446,13 +451,16 @@ async def generate_prep_document(
                 slack = SlackClient(slack_token.access_token)
                 slack_messages.extend(slack.search_by_email(attendee.email))
 
+    # Get user's email for perspective
+    user_email = await get_user_email(user_id) if not settings.demo_mode else None
+
     # Generate prep document
     if settings.demo_mode:
         generator = DemoGenerator()
     else:
         generator = PrepDocumentGenerator()
 
-    prep_document = generator.generate_prep_document(meeting, emails, slack_messages)
+    prep_document = generator.generate_prep_document(meeting, emails, slack_messages, user_email=user_email)
 
     # Cache the result (skip in demo mode)
     if not settings.demo_mode:

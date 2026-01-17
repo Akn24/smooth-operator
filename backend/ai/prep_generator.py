@@ -82,6 +82,13 @@ class EnhancedPrepGenerator:
 
     SYSTEM_PROMPT = """You are an intelligent executive assistant preparing meeting briefs.
 
+CRITICAL - PERSPECTIVE:
+Write everything from the USER's perspective. The user's email will be marked in the context.
+- Use "you" and "your" when referring to the user, NEVER their name
+- Use other attendees' names when referring to them
+- Example: "You discussed with Sarah..." NOT "Ankit discussed with Sarah..."
+- Example: "You should follow up..." NOT "The user should follow up..."
+
 CONTEXT ANALYSIS RULES:
 1. Analyze all provided context (messages, emails, documents)
 2. Identify direct topic relevance and prioritize accordingly
@@ -93,7 +100,7 @@ CONTEXT ANALYSIS RULES:
 OUTPUT REQUIREMENTS:
 Your response must be valid JSON with this exact structure:
 {
-    "context_summary": "2-3 sentence executive summary including key document insights",
+    "context_summary": "2-3 sentence executive summary including key document insights - written from USER's perspective using 'you'",
     "key_discussion_points": [
         {"point": "specific discussion point", "source": "Email/Slack/Document name", "priority": "high/medium/low"}
     ],
@@ -110,7 +117,7 @@ Your response must be valid JSON with this exact structure:
         "Specific, actionable question based on context"
     ],
     "action_items": [
-        "Outstanding action item with owner if known"
+        "Outstanding action item with owner if known - use 'you' for user's items"
     ],
     "referenced_sources": [
         {"type": "email/slack/document", "title": "source title", "date": "date if available"}
@@ -121,6 +128,7 @@ Your response must be valid JSON with this exact structure:
 }
 
 IMPORTANT GUIDELINES:
+- ALWAYS use "you/your" for the user, NEVER their name
 - Be SPECIFIC - reference actual conversations, documents, and data
 - Include NUMBERS and METRICS from documents when available
 - Flag concerning trends (revenue decline, deadline risks, etc.)
@@ -139,6 +147,7 @@ IMPORTANT GUIDELINES:
         meeting: Meeting,
         filtered_context: FilteredContext,
         has_external_attendees: bool = False,
+        user_email: str | None = None,
     ) -> EnhancedPrepDocument:
         """
         Generate a comprehensive meeting prep document.
@@ -147,6 +156,7 @@ IMPORTANT GUIDELINES:
             meeting: The meeting details
             filtered_context: Analyzed and filtered context
             has_external_attendees: Whether meeting has external attendees
+            user_email: The email of the user requesting the prep
 
         Returns:
             EnhancedPrepDocument with all sections
@@ -156,6 +166,7 @@ IMPORTANT GUIDELINES:
             meeting,
             filtered_context,
             has_external_attendees,
+            user_email,
         )
 
         # Call OpenAI API
@@ -212,9 +223,16 @@ IMPORTANT GUIDELINES:
         meeting: Meeting,
         filtered: FilteredContext,
         has_external: bool,
+        user_email: str | None = None,
     ) -> str:
         """Build the user prompt with all context."""
         parts = []
+
+        # User identification - CRITICAL for perspective
+        if user_email:
+            parts.append("## CURRENT USER (this is YOU - always use 'you' when referring to this person)")
+            parts.append(f"Email: {user_email}")
+            parts.append("IMPORTANT: Write the entire prep document from this user's perspective. Use 'you' and 'your', never their name.\n")
 
         # Meeting details
         parts.append("## MEETING DETAILS")
@@ -230,8 +248,12 @@ IMPORTANT GUIDELINES:
         external_list = []
         for attendee in meeting.attendees:
             name = attendee.name or attendee.email
+            is_user = user_email and attendee.email.lower() == user_email.lower()
             status = f" ({attendee.response_status})" if attendee.response_status else ""
-            parts.append(f"- {name}{status}")
+            if is_user:
+                parts.append(f"- {name}{status} [THIS IS YOU - use 'you' not their name]")
+            else:
+                parts.append(f"- {name}{status}")
 
             # Track external
             if not attendee.email.endswith('@company.com'):  # Simplified check
@@ -462,13 +484,16 @@ class DemoPrepGenerator:
         meeting: Meeting,
         filtered_context: FilteredContext,
         has_external_attendees: bool = False,
+        user_email: str | None = None,
     ) -> EnhancedPrepDocument:
         """Generate a demo prep document."""
-        attendee_names = [a.name or a.email.split('@')[0] for a in meeting.attendees]
+        # Filter out user from attendee names - only show other attendees
+        other_attendees = [a for a in meeting.attendees if not (user_email and a.email.lower() == user_email.lower())]
+        attendee_names = [a.name or a.email.split('@')[0] for a in other_attendees]
         names_str = ", ".join(attendee_names[:2]) if attendee_names else "the team"
 
         # Build context-aware content
-        context_summary = self._build_demo_summary(meeting, filtered_context, has_external_attendees)
+        context_summary = self._build_demo_summary(meeting, filtered_context, has_external_attendees, user_email)
         discussion_points = self._build_demo_discussion_points(meeting, filtered_context)
         relationship_notes = self._build_demo_relationship_notes(filtered_context)
         document_insights = self._build_demo_document_insights(filtered_context)
@@ -511,12 +536,15 @@ class DemoPrepGenerator:
         meeting: Meeting,
         filtered: FilteredContext,
         has_external: bool,
+        user_email: str | None = None,
     ) -> str:
         """Build a context-aware demo summary."""
-        attendee_names = [a.name or a.email.split('@')[0] for a in meeting.attendees]
-        names_str = ", ".join(attendee_names[:2])
+        # Filter out user from attendee names
+        other_attendees = [a for a in meeting.attendees if not (user_email and a.email.lower() == user_email.lower())]
+        attendee_names = [a.name or a.email.split('@')[0] for a in other_attendees]
+        names_str = ", ".join(attendee_names[:2]) if attendee_names else "others"
 
-        summary_parts = [f"This meeting with {names_str} "]
+        summary_parts = [f"Your meeting with {names_str} "]
 
         # Add document context if available
         if filtered.documents:

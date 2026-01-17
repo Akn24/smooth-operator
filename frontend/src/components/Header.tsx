@@ -15,7 +15,7 @@ export default function Header() {
             <div className="p-2 bg-gradient-to-r from-purple-600 to-blue-600 rounded-lg">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold text-gray-900">ProactivePA</span>
+            <span className="text-xl font-bold text-gray-900">Smooth Operator</span>
             {isDemoMode && (
               <span className="ml-2 px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-700 rounded-full">
                 Demo Mode

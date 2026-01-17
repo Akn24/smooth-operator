@@ -572,6 +572,17 @@ class ContextGatherer:
             except Exception as e:
                 logger.error(f"Error gathering Slack messages for {attendee.email}: {e}")
 
+            # Also get DMs with this person (conversations.history includes files properly)
+            try:
+                dm_messages = await self._get_direct_messages_with_files(
+                    attendee.email,
+                    days_back,
+                    include_documents,
+                )
+                all_messages.extend(dm_messages)
+            except Exception as e:
+                logger.error(f"Error getting DMs with {attendee.email}: {e}")
+
         # Also search by meeting title keywords if provided
         if meeting_title:
             try:
@@ -583,6 +594,14 @@ class ContextGatherer:
                 all_messages.extend(title_messages)
             except Exception as e:
                 logger.error(f"Error searching Slack by title keywords: {e}")
+
+        # Also fetch recent files separately (search API doesn't always return files)
+        if include_documents:
+            try:
+                file_messages = await self._gather_slack_files(attendees, days_back)
+                all_messages.extend(file_messages)
+            except Exception as e:
+                logger.error(f"Error gathering Slack files: {e}")
 
         # Deduplicate by timestamp
         seen_ts = set()
@@ -809,6 +828,153 @@ class ContextGatherer:
                 logger.error(f"Error processing Slack file: {e}")
 
         return processed_files
+
+    async def _get_direct_messages_with_files(
+        self,
+        email: str,
+        days_back: int,
+        include_documents: bool,
+    ) -> list[EnrichedSlackMessage]:
+        """
+        Get direct messages with a person using conversations.history API.
+        This API properly includes file attachments unlike search.messages.
+        """
+        if not self.slack_client:
+            return []
+
+        enriched_messages = []
+
+        try:
+            # Use the slack client's get_direct_messages method
+            dm_messages = self.slack_client.get_direct_messages(
+                user_email=email,
+                limit=50,
+                days_back=days_back,
+            )
+
+            for msg in dm_messages:
+                files = []
+                if include_documents and msg.get("files"):
+                    for file_info in msg["files"][:5]:
+                        slack_file = SlackFile(
+                            id=file_info.get("id", ""),
+                            name=file_info.get("name", "unknown"),
+                            filetype=file_info.get("filetype", ""),
+                            url_private=file_info.get("url_private", ""),
+                            size=file_info.get("size", 0),
+                            shared_by=file_info.get("user", ""),
+                            timestamp=str(file_info.get("timestamp", "")),
+                        )
+
+                        # Download and extract file
+                        if slack_file.url_private:
+                            try:
+                                content = await self.slack_client.download_file(slack_file.url_private)
+                                if content:
+                                    slack_file.content = content
+                                    extracted = await self.document_processor.extract_from_bytes(
+                                        content,
+                                        slack_file.name,
+                                    )
+                                    if extracted.success:
+                                        slack_file.extracted_text = extracted.text_content
+                                        logger.info(f"Successfully extracted text from Slack file: {slack_file.name}")
+                            except Exception as e:
+                                logger.error(f"Error downloading Slack DM file {slack_file.name}: {e}")
+
+                        files.append(slack_file)
+
+                enriched_messages.append(EnrichedSlackMessage(
+                    text=msg.get("text", ""),
+                    user=msg.get("user", "Unknown"),
+                    user_email=email,
+                    channel=msg.get("channel", "direct-message"),
+                    channel_type="dm",
+                    timestamp=msg.get("timestamp", ""),
+                    thread_ts=msg.get("thread_ts"),
+                    files=files,
+                    reactions=[],
+                    is_thread_reply=False,
+                ))
+
+        except Exception as e:
+            logger.error(f"Error getting DMs with {email}: {e}")
+
+        return enriched_messages
+
+    async def _gather_slack_files(
+        self,
+        attendees: list[Attendee],
+        days_back: int,
+    ) -> list[EnrichedSlackMessage]:
+        """
+        Gather files shared recently using files.list API.
+        This catches files that might be missed by search.messages.
+        """
+        if not self.slack_client:
+            return []
+
+        enriched_messages = []
+        seen_file_ids = set()
+
+        for attendee in attendees:
+            try:
+                # List files shared by this user
+                files = self.slack_client.list_files(
+                    user_email=attendee.email,
+                    days_back=days_back,
+                    max_files=10,
+                )
+
+                for file_info in files:
+                    # Skip if already processed
+                    if file_info.get("id") in seen_file_ids:
+                        continue
+                    seen_file_ids.add(file_info.get("id"))
+
+                    slack_file = SlackFile(
+                        id=file_info.get("id", ""),
+                        name=file_info.get("name", "unknown"),
+                        filetype=file_info.get("filetype", ""),
+                        url_private=file_info.get("url_private", "") or file_info.get("url_private_download", ""),
+                        size=file_info.get("size", 0),
+                        shared_by=file_info.get("user", ""),
+                        timestamp=str(file_info.get("timestamp", "")),
+                    )
+
+                    # Download and extract file
+                    if slack_file.url_private:
+                        try:
+                            content = await self.slack_client.download_file(slack_file.url_private)
+                            if content:
+                                slack_file.content = content
+                                extracted = await self.document_processor.extract_from_bytes(
+                                    content,
+                                    slack_file.name,
+                                )
+                                if extracted.success:
+                                    slack_file.extracted_text = extracted.text_content
+                                    logger.info(f"Successfully extracted text from Slack file (via files.list): {slack_file.name}")
+                        except Exception as e:
+                            logger.error(f"Error downloading Slack file {slack_file.name}: {e}")
+
+                    # Create a synthetic message for this file
+                    enriched_messages.append(EnrichedSlackMessage(
+                        text=f"[Shared file: {slack_file.name}]",
+                        user=attendee.name or attendee.email.split('@')[0],
+                        user_email=attendee.email,
+                        channel="file-share",
+                        channel_type="channel",
+                        timestamp=slack_file.timestamp or str(datetime.utcnow().timestamp()),
+                        files=[slack_file],
+                        reactions=[],
+                        is_thread_reply=False,
+                    ))
+
+            except Exception as e:
+                logger.error(f"Error listing files for {attendee.email}: {e}")
+
+        return enriched_messages
 
     async def _gather_calendar_attachments(
         self,
